@@ -1,5 +1,4 @@
 import cv2, chess, chess.engine, chess.pgn
-import statistics as stats
 import numpy as np
 import socket, io, time, pathlib
 import tkinter as tk
@@ -15,7 +14,7 @@ ENGINE_PATH = '/usr/games/stockfish'
 
 SQSIZE = 50 # Chess board square size in pixels.
 BDSIZE = 8 * SQSIZE # Board size in pixels.
-D = SQSIZE // 20 # Width of border to be omitted from squares.
+D = int((SQSIZE+19) / 20) # Width of border to be omitted from squares.
 MIN_AREA = SQSIZE*SQSIZE // 15 # Minimum area for a piece image.
 
 # Create a mask for the largest circular region within a square
@@ -47,7 +46,7 @@ engine = chess.engine.SimpleEngine.popen_uci(ENGINE_PATH)
 
 # Print the engine options.
 print('Engine Option         Type    Default'\
-      'Min    Max     Var')
+      '               Min    Max     Var')
 eo = engine.options
 def show_empty(x): return x if x != '' else "''"
 for k in eo:
@@ -589,6 +588,8 @@ def Make_Engine_Move():
     # Show the move.
     mv_str = 'Engine Move: ' + board.variation_san([engine_move])
     board.push(engine_move)
+    if board.is_game_over():
+        mv_str = mv_str + ' ' + board.result()
     Show_Message_Wait(mv_str, 'black')
 
 def On_Closing():
@@ -683,7 +684,7 @@ def On_Flip(event=None):
 root = tk.Tk()
 root.title(TITLE)
 wait_var = tk.IntVar()
-img = Image.new('RGBA', (512,512), (0,128,43))
+img = Image.new('RGBA', (512,512), (0,0,0))
 img = ImageTk.PhotoImage(img)
 posn_frame = tk.Frame(root, width=512, bd=6, relief=tk.FLAT)
 posn_frame.pack(side=tk.TOP)
@@ -810,15 +811,14 @@ while True:
         continue
     # Legal move found.
     mv_str = board.variation_san([move])
-    mess_str = mv_str
     color = 'black'
     engine_move = chess.Move.null()
     board.push(move)
     if board.is_game_over():
-        mess_str = mv_str + ' ' + board.result()
+        mv_str = mv_str + ' ' + board.result()
         color = 'red'
     Show_Position(board, {move.from_square, move.to_square})
-    mess_label.configure(text=mess_str, fg=color)
+    mess_label.configure(text=mv_str, fg=color)
     if not engine_on:
         root.wait_variable(wait_var) # Wait for Next>> to be pressed.
 
