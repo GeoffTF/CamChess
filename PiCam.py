@@ -1,57 +1,41 @@
-import socket, io
-import time
-import tkinter as tk
-from tkinter import simpledialog
-from PIL import ImageTk, Image
+import socket
+from picamera import PiCamera
+from io import BytesIO
+from time import sleep
 
-host = 'raspberrypi.local'      # Server host name or IP address.
-port = 60000                    # Reserve a port.
+host = 'raspberrypi.local'        # Server host name or IP address.
+port = 60000                      # Reserve a port for the server.
 
-def on_mouse_click(e):
-    ''' Connect to the camera server, receive an image over
-    the connection and close the connection. Display the image.
-    '''
-    print('Mouse clicked')
-    t1 = time.time()
+# Initialise the Raspberry Pi camera.
+camera = PiCamera()
+camera.resolution = (540, 540)
+camera.zoom = (0.25, 0.25, 0.5, 0.5)
+camera.exposure_compensation = 6
+camera.rotation = 270
+sleep(2)
+print('Camera initialised')
 
-    with socket.socket() as sock:
-        sock.connect((host, port))
-        print('Connected to', host, 'port', port)
-        
-        # Receive the image over the connection.
-        stream = io.BytesIO()
-        while True:
-            chunk = sock.recv(2048)
-            if not chunk: break
-            stream.write(chunk)
+# Create a TCP/IP socket and bind it to the port.
+with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+    sock.bind((host, port))
 
-    t2 = time.time()
-    print('Received the image', stream.tell(), 'bytes', t2-t1, 'seconds')
+    while True:
+        # Wait for a request to connect.
+        sock.listen()
+        print('Server listening....')
+        conn, addr = sock.accept()
+        print('Got connection from', addr)
 
-    # Display the image.
-    image = Image.open(stream).convert('RGBA')
-    print('PIL image created', image.size)
-    img = ImageTk.PhotoImage(image)
-    print('Photo image created')
-    label.configure(image=img)
-    label.image = img
-   
-    # Save the image?
-    answer = simpledialog.askstring("Save Image?", "File name?",
-                                            parent=root)
-    if answer:
+        # Capture a camera image to a BytesIO stream.
+        stream = BytesIO()
+        camera.capture(stream, 'jpeg')
+        print('Camera image captured')
+    
+        # Send the image over the connection.
         stream.seek(0)
-        with open('/home/geoff/'+answer, 'wb') as f:
-            f.write(stream.getbuffer())
-    stream.close()
-  
-# Create a window to display images.
-# A left mouse click in the window updates the image.
-root = tk.Tk()
-root.title('Camera Image')
-image = Image.open('/home/geoff/Pictures/Camera.png')
-img = ImageTk.PhotoImage(image)
-label = tk.Label(root, image=img)
-label.pack()
-root.bind('<Button-1>', on_mouse_click)
-root.mainloop()
+        with conn:
+            while True:
+               chunk = stream.read(2048)
+               if not chunk: break
+               conn.sendall(chunk)
+        print('Image sent')
