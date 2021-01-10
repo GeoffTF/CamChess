@@ -63,7 +63,6 @@ def Get_Image():
     encoded image over the connection, and close the connection.
     Return an OpenCV image.
     '''
-    global close_enabled
     host = 'raspberrypi.local'      # Server host name or IP address.
     port = 60000                    # Reserve a port.
     t1 = time.time()
