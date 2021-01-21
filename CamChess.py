@@ -58,32 +58,40 @@ for k in eo:
 
 close_enabled = True # Main window close button enabled.
 
+host = 'raspberrypi.local'      # Server IP address.
+port = 60000                    # Reserve a port.
+
 def Get_Image():
     ''' Connect to the Raspberry Pi Zero camera server, receive an
     encoded image over the connection, and close the connection.
     Return an OpenCV image.
     '''
-    host = 'raspberrypi.local'      # Server host name or IP address.
-    port = 60000                    # Reserve a port.
     t1 = time.time()
     try:
-        with socket.socket() as sock:
-            sock.connect((host, port))
-            print('Connected to', host, 'port', port)
-            # Receive the image over the connection.
-            stream = io.BytesIO()
-            while True:
-                chunk = sock.recv(2048)
-                if not chunk: break
-                stream.write(chunk)
+        # Send the command to take a picture.
+        sock.send('SNAP'.encode('UTF-8'))
+        print('SNAP command sent')
+    
+        # Receive the number of bytes to be sent by the server.
+        bytes = sock.recv(128)
+        nsent = int(bytes.decode('UTF-8'))
+        print('Received number of bytes to be sent:', nsent)
+    
+        # Receive the picture over the connection.
+        stream = io.BytesIO()
+        nreceived = 0
+        while True:
+            chunk = sock.recv(4096)  # Receive data over the connection.
+            stream.write(chunk)      # Write it to the stream.
+            nreceived += len(chunk)
+            if nreceived == nsent: break
         t2 = time.time()
-        print('Received the image', stream.tell(), 'bytes',
+        print('Received the image', nreceived, 'bytes',
                             t2-t1, 'seconds')
         stream.seek(0)
         image = cv2.imdecode(np.frombuffer(stream.read(), np.uint8),\
                              cv2.IMREAD_COLOR)
     except:
-        print('Image Capture Failed')
         image = None
     return image
 
@@ -120,8 +128,8 @@ def Find_Corners(image):
         # p1 is the inner corner farthest from the required outer
         # corner.
         # (p3x, p3y) is the approximate location.
-        p3x = round(p2[0] + (p2[0] - p1[0])/6)
-        p3y = round(p2[1] + (p2[1] - p1[1])/6)
+        p3x = p2[0] + (p2[0] - p1[0])/6
+        p3y = p2[1] + (p2[1] - p1[1])/6
         return p3x, p3y
 
     # Find approximate locations for the four outer corners.
@@ -144,24 +152,26 @@ def Transform_Image(Corners, image):
         # Find accurate coordinates for a corner of the board.
         # Construct a Region Of Interest around the approximate
         # location.
-        x, y = round(x), round(y)
+        x, y = int(round(x)), int(round(y))
         d = SQSIZE // 10
         try:
             roi = gray[y-d:y+d+1, x-d:x+d+1]
             # Find the strongest corner in the Region Of Interest.
             qcorners = cv2.goodFeaturesToTrack(roi, 1, 0.1, d)
         except:
+            print('Corner not found', x, y)
             raise ValueError
-        if qcorners is None: raise ValueError
-        else:
-            qcorner = qcorners[0,0,0]+x-d, qcorners[0,0,1]+y-d
+        if qcorners is None:
+            print('Corner not found', x, y)
+            raise ValueError
+        qcorner = qcorners[0,0,0]+x-d, qcorners[0,0,1]+y-d
         return qcorner
 
     try:
         QCorners = [find_corner(p[0], p[1]) for p in Corners]
     except ValueError:
         return None, Corners
-    #print('Accurate outer corners', QCorners)
+    print('Accurate outer corners', QCorners)
     # Construct the prespective transformation matrix.
     pts1 = np.float32(QCorners)
     s = BDSIZE-1
@@ -401,21 +411,25 @@ def Promotion_Piece():
     def On_Q(event=None):
         global prom_piece
         prom_piece = chess.QUEEN
+        next_button.focus_set()
         child.destroy()
 
     def On_R(event=None):
         global prom_piece
         prom_piece = chess.ROOK
+        next_button.focus_set()
         child.destroy()
 
     def On_B(event=None):
         global prom_piece
         prom_piece = chess.BISHOP
+        next_button.focus_set()
         child.destroy()
 
     def On_N(event=None):
         global prom_piece
         prom_piece = chess.KNIGHT
+        next_button.focus_set()
         child.destroy()
 
     pfont = ('Liberation', 24)
@@ -718,6 +732,16 @@ root.bind('l', On_Level)
 root.bind('f', On_Flip)
 root.bind('r', On_Rotate)
 root.protocol("WM_DELETE_WINDOW", On_Closing)
+
+# Connect to the camera server.
+while True:
+    try:
+        sock = socket.socket()          # Create a TCP/IP socket.
+        sock.connect((host, port))      # Connect to the server.
+        print('Connected to', host, 'port', port)
+        break
+    except:
+        Show_Message_Wait('Failed to Connect to Server')
 
 # Identify the chess board.
 while True:
