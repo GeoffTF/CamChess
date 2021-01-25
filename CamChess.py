@@ -1,3 +1,7 @@
+''' This program runs on the main computer. It requests and receives
+images of the chess board and analyses them. It identifies and
+displays the position. It uses a chess engine make replies.
+'''
 import cv2, chess, chess.engine, chess.pgn
 import numpy as np
 import socket, io, time, pathlib
@@ -100,10 +104,9 @@ def Find_Corners(image):
     chess board from an image of the empty board. The board is assumed
     to be a standard vinyl roll-up board, as used by chess clubs.
     '''
-    # Convert the image to gray scale.
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    red = image[:,:,2] # The red channel has the maximum contrast.
     # Find the 49 inner corners of the chess board.
-    found, in_corners = cv2.findChessboardCorners(gray, (7,7),
+    found, in_corners = cv2.findChessboardCorners(red, (7,7),
         flags=cv2.CALIB_CB_NORMALIZE_IMAGE|cv2.CALIB_CB_ADAPTIVE_THRESH)
     if not found: return None
     in_corners = in_corners.reshape((49,2))
@@ -145,26 +148,35 @@ def Transform_Image(Corners, image):
     scale image of the board. The function returns the transformed
     image and accurate coordinates for the four corners.
     '''
-    # Convert the image to gray scale.
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    red = image[:,:,2] # The red channel has the maximum contrast.
 
     def find_corner(x, y):
-        # Find accurate coordinates for a corner of the board.
-        # Construct a Region Of Interest around the approximate
-        # location.
-        x, y = int(round(x)), int(round(y))
-        d = SQSIZE // 10
+        # Find accurate coordinates for an outer corner of the board.
+        x, y = int(x+0.5), int(y+0.5)
+        d = SQSIZE // 5
         try:
-            roi = gray[y-d:y+d+1, x-d:x+d+1]
-            # Find the strongest corner in the Region Of Interest.
-            qcorners = cv2.goodFeaturesToTrack(roi, 1, 0.1, d)
+            # Construct a Region Of Interest centred on the
+            # approximate corner location.
+            roi = red[y-d:y+d+1, x-d:x+d+1]
+            # Find up to two strongest corners in the ROI.
+            qcorners = cv2.goodFeaturesToTrack(roi, 2, 0.1, d/2)
+            qcorners = qcorners.reshape(-1,2)
         except:
-            print('Corner not found', x, y)
+            print('Corner not found A', x, y)
             raise ValueError
         if qcorners is None:
-            print('Corner not found', x, y)
+            print('Corner not found B', x, y)
             raise ValueError
-        qcorner = qcorners[0,0,0]+x-d, qcorners[0,0,1]+y-d
+        # Find the corner nearest to the centre of the ROI.
+        min_delta = 3*d*d
+        nqcorners = qcorners.shape[0]
+        for c in range(nqcorners):
+            px, py = qcorners[c]
+            delta = (px - d)*(px - d) + (py - d)*(py - d)
+            if delta < min_delta:
+                min_delta = delta
+                min_c = c
+        qcorner = qcorners[min_c,0]+x-d, qcorners[min_c,1]+y-d
         return qcorner
 
     try:
@@ -594,6 +606,12 @@ def Make_Engine_Move():
     board and display it.
     '''
     global engine, engine_move
+    if board.is_game_over():
+        # Show the final position.
+        Show_Position(board)
+        # Show the result.
+        Show_Message_Wait('Game Over: ' + board.result(), 'black')
+        return
     engine_move = engine.play(board, chess.engine.Limit(time=1.0)).move
     changed_squares = {engine_move.from_square, engine_move.to_square}
     # Show the engine move on the chess board diagram.
