@@ -1,5 +1,8 @@
 ''' This program runs on the main computer and is helpful for
-setting up the camera.
+setting up the camera. Click with the left button of the mouse
+when the window has focus. An image will then be requested from
+the camera server, and will be displayed in the window when it
+is received.
 '''
 import socket, io
 import time
