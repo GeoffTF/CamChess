@@ -14,4 +14,4 @@ Geoff Fergusson
 
 ## Licenses
 
-CamChess (and PiCam) are available under the MIT license. See the LICENCE file for details. CamChess uses Merida chess piece images. These images are available under a GNU licence, which is in the Pieces folder.
+CamChess, PiCam and CamSet) are available under the MIT license. See the LICENCE file for details. CamChess uses Merida chess piece images. These images are available under a GNU licence, which is in the Pieces folder.
