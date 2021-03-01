@@ -70,32 +70,27 @@ def Get_Image():
     encoded image over the connection, and close the connection.
     Return an OpenCV image.
     '''
+    host = 'raspberrypi.local'      # Server host name or IP address.
+    port = 60000                    # Reserve a port.
     t1 = time.time()
     try:
-        # Send the command to take a picture.
-        sock.send('SNAP'.encode('UTF-8'))
-        print('SNAP command sent')
-    
-        # Receive the number of bytes to be sent by the server.
-        bytes = sock.recv(128)
-        nsent = int(bytes.decode('UTF-8'))
-        print('Received number of bytes to be sent:', nsent)
-    
-        # Receive the picture over the connection.
-        stream = io.BytesIO()
-        nreceived = 0
-        while True:
-            chunk = sock.recv(4096)  # Receive data over the connection.
-            stream.write(chunk)      # Write it to the stream.
-            nreceived += len(chunk)
-            if nreceived == nsent: break
+        with socket.socket() as sock:
+            sock.connect((host, port))
+            print('Connected to', host, 'port', port)
+            # Receive the image over the connection.
+            stream = io.BytesIO()
+            while True:
+                chunk = sock.recv(2048)
+                if not chunk: break
+                stream.write(chunk)
         t2 = time.time()
-        print('Received the image', nreceived, 'bytes',
+        print('Received the image', stream.tell(), 'bytes',
                             t2-t1, 'seconds')
         stream.seek(0)
         image = cv2.imdecode(np.frombuffer(stream.read(), np.uint8),\
                              cv2.IMREAD_COLOR)
     except:
+        print('Image Capture Failed')
         image = None
     return image
 
@@ -750,16 +745,6 @@ root.bind('l', On_Level)
 root.bind('f', On_Flip)
 root.bind('r', On_Rotate)
 root.protocol("WM_DELETE_WINDOW", On_Closing)
-
-# Connect to the camera server.
-while True:
-    try:
-        sock = socket.socket()          # Create a TCP/IP socket.
-        sock.connect((host, port))      # Connect to the server.
-        print('Connected to', host, 'port', port)
-        break
-    except:
-        Show_Message_Wait('Failed to Connect to Server')
 
 # Identify the chess board.
 while True:
